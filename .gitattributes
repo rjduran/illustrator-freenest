@@ -1,0 +1,15 @@
+* text=auto
+*.cpp text eol=lf
+*.h text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.jsxinc text eol=lf
+*.ps1 text eol=crlf
+*.psd1 text eol=crlf
+*.cmd text eol=crlf
+*.rc text eol=crlf
+*.vcxproj text eol=crlf
+*.svg text eol=lf
+*.yml text eol=lf

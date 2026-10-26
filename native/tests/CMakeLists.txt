@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(NestNativeChecks LANGUAGES CXX)
+add_executable(NestNativeChecks main.cpp ../Source/NestCore.cpp)
+target_compile_features(NestNativeChecks PRIVATE cxx_std_17)
+target_include_directories(NestNativeChecks PRIVATE ../Source ../../vendor/OpenNest/src/opennest_cpp/src)
+target_compile_definitions(NestNativeChecks PRIVATE NOMINMAX UNICODE _UNICODE)

@@ -1,0 +1,17 @@
+FreeNest for Illustrator third-party notices:
+
+OpenNest NFP engine, Petras Vestartas
+Source: https://github.com/petrasvestartas/OpenNest
+Revision: be5456b840edbf8615dc7d84b2acbc43f330d772
+License: MIT (OpenNest-MIT.txt). Credits: OpenNest-CREDITS.md.
+
+Clipper2, Angus Johnson, copyright 2010-2024 (source headers)
+Source: OpenNest/src/opennest_cpp/src/clipper2
+License: Boost Software License 1.0 (Boost-Software-License-1.0.txt).
+
+Boost.Polygon and the vendored Boost support headers
+Source: OpenNest/src/opennest_cpp/third_party/boost_min
+License: Boost Software License 1.0 (Boost-Software-License-1.0.txt).
+Individual author and copyright notices remain in the unchanged source checkout.
+
+Adobe Illustrator and its SDK are separate prerequisites, not part of the repository. The native build references the SDK framework in place; SDK source and headers are not included in packages.
