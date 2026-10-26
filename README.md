@@ -1,8 +1,8 @@
 # FreeNest for Illustrator
 
-Free, open-source polygon nesting and single-stroke object labels for Adobe Illustrator, powered by [OpenNest](https://github.com/petrasvestartas/OpenNest).
+FreeNest for Illustrator - A free, open-source nesting plugin for Adobe Illustrator
 
-**Status: unreleased development build.** The current host target is **Illustrator 2024 (28.x) on Windows x64**. Build from source using the separately obtained Illustrator SDK; no packaged public release is available yet. Other Illustrator versions, macOS, and production release packaging are not verified. This is an independent project, not an Adobe product.
+**Status: pre-release 0.1.0.** This version is intended for testing and feedback. The current host target is **Illustrator 2024 (28.x) on Windows x64**. Other Illustrator versions and macOS are not verified. The Adobe Illustrator SDK is required only to build from source. This is an independent project, not an Adobe product.
 
 ## Features
 
@@ -37,7 +37,7 @@ For one-click access, open **Window > FreeNest**. Its compact native panel conta
 
 ## Versioned releases
 
-The first release is **0.1.0**, currently an unpublished candidate. `VERSION` is the single version source for the About dialog, Windows plugin metadata and release ZIP filename.
+The initial pre-release version is **0.1.0**. `VERSION` is the single version source for the About dialog, Windows plugin metadata and release ZIP filename.
 
 Run `./prepare-release.ps1` to build, run native and independent geometry checks, and prepare `dist/<version>/` with a Windows ZIP, release notes and SHA-256 checksum. The Adobe SDK and test dependencies are required on the build machine; the SDK is not included in the download. Preparation never installs or publishes the plugin, creates a commit or makes a tag.
 
