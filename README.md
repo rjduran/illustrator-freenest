@@ -113,7 +113,7 @@ Packing styles include **Narrow strip** (default), **Compact area**, and **Tight
 
 ## About FreeNest
 
-Choose **Object > FreeNest > About FreeNest** to view the current development version, author, MIT license and OpenNest credit. The About dialog is available with no document open.
+Choose **Object > FreeNest > About FreeNest** to see the installed plugin version and open the GitHub repository. The About dialog is available with no document open.
 
 ## License and credits
 

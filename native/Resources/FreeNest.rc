@@ -80,19 +80,16 @@ BEGIN
  LTEXT "Estimate uses the calculation limit; may finish earlier. Validation and labels can add time.",IDC_ESTIMATE_NOTE,12,74,260,24
  PUSHBUTTON "Cancel",IDCANCEL,218,105,53,15
 END
-IDD_ABOUT DIALOGEX 0,0,270,166
+IDD_ABOUT DIALOGEX 0,0,225,79
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "About FreeNest"
 FONT 9,"Segoe UI"
 BEGIN
- LTEXT "FreeNest for Illustrator",-1,12,10,246,12
- LTEXT FREENEST_ABOUT_VERSION,-1,12,24,246,10
- LTEXT "Nesting and single-stroke labeling for Adobe Illustrator.",-1,12,42,246,20
- LTEXT "Copyright (c) 2026 RJ Duran. MIT license.",-1,12,66,246,10
- LTEXT "Powered by OpenNest by Petras Vestartas and its bundled VDA engraving font.",-1,12,84,246,22
- LTEXT "Windows x64 / Illustrator 2024",-1,12,110,246,10
- LTEXT "Independent project; not affiliated with Adobe.",-1,12,124,246,10
- DEFPUSHBUTTON "Close",IDOK,205,142,53,15
+ LTEXT FREENEST_ABOUT_VERSION,-1,12,10,201,11
+ LTEXT "Nesting and single-stroke labeling for Illustrator",-1,12,23,201,11
+ LTEXT "RJ Duran | MIT License | Powered by OpenNest",-1,12,36,201,11
+ PUSHBUTTON "GitHub repository",IDC_ABOUT_GITHUB,12,54,84,15
+ DEFPUSHBUTTON "Close",IDOK,160,54,53,15
 END
 1 VERSIONINFO
  FILEVERSION FREENEST_VERSION_NUMBERS

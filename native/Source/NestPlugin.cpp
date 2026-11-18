@@ -5,6 +5,7 @@
 #include "NestOutput.h"
 #include "NestPanel.h"
 #include "resource.h"
+#include <shellapi.h>
 #include <thread>
 #include <memory>
 #include <stdexcept>
@@ -12,6 +13,8 @@
 #include <iomanip>
 #include <map>
 #include <chrono>
+
+#pragma comment(lib,"Shell32.lib")
 
 namespace {
 HMODULE Module() {
@@ -34,6 +37,13 @@ void CenterDialog(HWND dialog) {
 }
 INT_PTR CALLBACK AboutDialog(HWND h,UINT message,WPARAM w,LPARAM) {
     if(message==WM_INITDIALOG) {CenterDialog(h);return TRUE;}
+    if(message==WM_COMMAND&&LOWORD(w)==IDC_ABOUT_GITHUB&&HIWORD(w)==BN_CLICKED) {
+        if(reinterpret_cast<INT_PTR>(ShellExecuteW(h,L"open",L"https://github.com/rjduran/illustrator-freenest",
+                                                   nullptr,nullptr,SW_SHOWNORMAL))<=32)
+            MessageBoxW(h,L"Could not open the browser. Visit github.com/rjduran/illustrator-freenest.",
+                        L"FreeNest",MB_OK|MB_ICONEXCLAMATION);
+        return TRUE;
+    }
     if(message==WM_CLOSE||(message==WM_COMMAND&&(LOWORD(w)==IDOK||LOWORD(w)==IDCANCEL))) {
         EndDialog(h,IDOK);return TRUE;
     }

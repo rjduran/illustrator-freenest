@@ -32,6 +32,11 @@ try {
     if ($LASTEXITCODE) {throw 'Plugin metadata generation failed.'}
     & $msbuild FreeNest.vcxproj /p:Configuration=Release /p:Platform=x64 "/p:IllustratorSDKRoot=$IllustratorSDKRoot" "/p:PlatformToolset=$PlatformToolset" /m:4 /verbosity:minimal
     if ($LASTEXITCODE) {throw 'Native plugin build failed.'}
+    $version=(Get-Content -LiteralPath ../VERSION -Raw).Trim()
+    $pluginVersion=(Get-Item -LiteralPath build/win/x64/Release/FreeNest.aip).VersionInfo
+    if ($pluginVersion.FileVersion -ne $version -or $pluginVersion.ProductVersion -ne $version) {
+        throw "The built plugin version does not match VERSION ($version). Rebuild before packaging or deploying."
+    }
     & $cmake -S tests -B build/tests -A x64
     if ($LASTEXITCODE) {throw 'Native test configuration failed.'}
     & $cmake --build build/tests --config Release

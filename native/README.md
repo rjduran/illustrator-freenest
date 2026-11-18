@@ -15,7 +15,7 @@ Close Illustrator before copying. If it is running, the build stays ready; run `
 
 ## About FreeNest
 
-Choose **Object > FreeNest > About FreeNest** to open a compact, centered project information dialog. It includes the development version, RJ Duran attribution, MIT license, OpenNest/VDA credit and supported host platform. It is available even without an open document. Live Illustrator verification is still required for the compact dialog layout.
+Choose **Object > FreeNest > About FreeNest** to see the installed plugin version, project credits, and **GitHub repository** button. The dialog is available even without an open document.
 
 ## Dockable command panel
 
