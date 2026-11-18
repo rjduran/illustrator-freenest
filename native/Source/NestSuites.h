@@ -9,6 +9,9 @@
 #include "AIDocument.h"
 #include "AIPanel.h"
 #include "AIUITheme.h"
+#include "AISymbol.h"
+#include "AIArtStyle.h"
+#include "AITransformArt.h"
 extern "C" {
 extern AIMenuSuite* sAIMenu;
 extern AIUnicodeStringSuite* sAIUnicodeString;
@@ -24,4 +27,7 @@ extern AIArtboardSuite* sAIArtboard;
 extern AIDocumentSuite* sAIDocument;
 extern AIPanelSuite* sAIPanel;
 extern AIUIThemeSuite* sAIUITheme;
+extern AISymbolSuite* sAISymbol;
+extern AIArtStyleSuite* sAIArtStyle;
+extern AITransformArtSuite* sAITransformArt;
 }

@@ -59,9 +59,42 @@ Part Prepare(const std::vector<Segment>& segments) {
     for(auto& p:outline) {p.x-=part.origin.x;p.y-=part.origin.y;if(std::abs(p.x)>100000||std::abs(p.y)>100000) throw std::runtime_error("Part is too large.");}
     return part;
 }
+Part PrepareSymbolBounds(double left,double bottom,double right,double top) {
+    if(!(right>left&&top>bottom)) throw std::runtime_error("A symbol instance has no usable visible bounds.");
+    std::vector<Segment> segments;
+    for(Point p:std::initializer_list<Point>{{left,bottom},{right,bottom},{right,top},{left,top}})
+        segments.push_back({p,p,p});
+    return Prepare(segments);
+}
 Point Place(Point p,Point origin,Point destination,double angle) {
     double rad=angle*3.14159265358979323846/180,c=std::cos(rad),s=std::sin(rad),x=p.x-origin.x,y=p.y-origin.y;
     return {c*x-s*y+destination.x,s*x+c*y+destination.y};
+}
+bool SymbolFitsPlacedBounds(const Part& footprint,Point destination,double angle,Point lower,Point upper) {
+    if(footprint.outline.empty()||!(lower.x<upper.x&&lower.y<upper.y)) return false;
+    Point min=destination,max=destination;
+    for(auto vertex:footprint.outline) {
+        auto p=Place(vertex,{0,0},destination,angle);
+        min.x=std::min(min.x,p.x);min.y=std::min(min.y,p.y);
+        max.x=std::max(max.x,p.x);max.y=std::max(max.y,p.y);
+    }
+    constexpr double tolerance=0.025;
+    return lower.x>=min.x-tolerance&&upper.x<=max.x+tolerance&&
+           lower.y>=min.y-tolerance&&upper.y<=max.y+tolerance;
+}
+bool SymbolContourMatchesPlacement(const Part& footprint,const std::vector<Segment>& actual,Point destination,double angle) {
+    if(actual.empty()||actual.size()!=footprint.segments.size()) return false;
+    auto matches=[&](Point source,Point observed) {
+        auto expected=Place(source,footprint.origin,destination,angle);
+        return std::hypot(expected.x-observed.x,expected.y-observed.y)<=0.025;
+    };
+    for(size_t i=0;i<actual.size();++i) {
+        const auto& before=footprint.segments[i];
+        const auto& after=actual[i];
+        if(!matches(before.anchor,after.anchor)||!matches(before.left,after.left)||
+            !matches(before.right,after.right)) return false;
+    }
+    return true;
 }
 Point SheetSize(const Part& sheet) {
     Point size;
@@ -284,7 +317,9 @@ std::vector<Placement> Engine::Solve(const std::vector<Part>& parts,const Settin
     if(!std::isfinite(s.width)||!std::isfinite(s.height)||!std::isfinite(s.gap)||!std::isfinite(s.margin)||!std::isfinite(s.seconds)||
        n<1||n>500||s.width<=0||s.height<=0||s.gap<0||s.margin<0||s.seconds<0.1||s.seconds>300||
        s.width>100000||s.height>100000||2*(s.margin+0.1)>=std::min(s.width,s.height)||
-       (s.rotations!=1&&s.rotations!=2&&s.rotations!=4&&s.rotations!=8)||s.maxSheets<1||s.maxSheets>500||int(s.packingStyle)<0||int(s.packingStyle)>2) throw std::runtime_error("Invalid nesting settings.");
+       std::none_of(std::begin(OrientationChoices),std::end(OrientationChoices),
+                    [&](auto choice){return choice.count==s.rotations;})||
+       s.maxSheets<1||s.maxSheets>500||int(s.packingStyle)<0||int(s.packingStyle)>2) throw std::runtime_error("Invalid nesting settings.");
     Part custom;
     if(s.useCustomSheet) {
         custom=Prepare(s.customSheet.segments);
@@ -297,9 +332,10 @@ std::vector<Placement> Engine::Solve(const std::vector<Part>& parts,const Settin
         holes[partIndex++]=int(part.holes.size());
         for(const auto& hole:part.holes) {holeCounts.push_back(int(hole.size()));for(auto p:hole) {holeXY.push_back(p.x);holeXY.push_back(p.y);}}
         auto outline=part.outline;
-        // The upstream rectangle fast path permits quarter turns for rotation-count 2.
-        // A redundant collinear vertex routes half-turn-only jobs through the general engine.
-        if(s.rotations==2&&outline.size()==4) outline.insert(outline.begin()+1,Mid(outline[0],outline[1]));
+        // The rectangle fast path only tries quarter turns. Use the general solver
+        // for half-turn-only jobs and when 30-degree steps add non-quarter-turn options.
+        if((s.rotations==2||s.rotations==12)&&outline.size()==4)
+            outline.insert(outline.begin()+1,Mid(outline[0],outline[1]));
         counts.push_back(int(outline.size()));for(auto p:outline) {xy.push_back(p.x);xy.push_back(p.y);}
     }
     if(xy.size()+holeXY.size()>200000) throw std::runtime_error("Selection exceeds 100,000 flattened vertices.");

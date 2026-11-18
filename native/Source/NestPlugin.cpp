@@ -142,8 +142,12 @@ INT_PTR CALLBACK SettingsDialog(HWND h,UINT message,WPARAM w,LPARAM l) {
         CheckDlgButton(h,IDC_CUSTOM_SHEET,s->useCustomSheet?BST_CHECKED:BST_UNCHECKED);
         EnableWindow(GetDlgItem(h,IDC_CUSTOM_SHEET),!s->customSheet.segments.empty());
         SheetFields(h,state);
-        for(auto label:{"Fixed", "0 / 180 degrees", "Quarter turns", "45-degree steps"}) SendDlgItemMessageA(h,IDC_ROTATIONS,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label));
-        int selected=s->rotations==1?0:s->rotations==2?1:s->rotations==4?2:3;
+        int selected=0;
+        for(int i=0;i<int(std::size(nestai::OrientationChoices));++i) {
+            auto choice=nestai::OrientationChoices[i];
+            SendDlgItemMessageA(h,IDC_ROTATIONS,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(choice.label));
+            if(choice.count==s->rotations) selected=i;
+        }
         SendDlgItemMessage(h,IDC_ROTATIONS,CB_SETCURSEL,selected,0);CenterDialog(h);return TRUE;
     }
     if(message==WM_COMMAND&&LOWORD(w)==IDC_INCLUDE_BOUNDARY) {
@@ -213,9 +217,9 @@ INT_PTR CALLBACK SettingsDialog(HWND h,UINT message,WPARAM w,LPARAM l) {
             if(next.useCustomSheet&&next.customSheet.segments.empty()) throw std::runtime_error("Capture a sheet boundary first.");
             next.labelHeight=state->labelHeight;next.labelFont=state->labelFont;
             next.labelColor=state->labelColor;next.labelStrokeWidth=state->labelStrokeWidth;next.separateLabelLayer=state->separateLabelLayer;
-            int selected=int(SendDlgItemMessage(h,IDC_ROTATIONS,CB_GETCURSEL,0,0));int rotations[]={1,2,4,8};
-            if(selected<0||selected>3) throw std::runtime_error("Choose permitted orientations.");
-            next.rotations=rotations[selected];
+            int selected=int(SendDlgItemMessage(h,IDC_ROTATIONS,CB_GETCURSEL,0,0));
+            if(selected<0||selected>=int(std::size(nestai::OrientationChoices))) throw std::runtime_error("Choose permitted orientations.");
+            next.rotations=nestai::OrientationChoices[selected].count;
             if(2*(next.margin+0.1)>=std::min(next.width,next.height)) throw std::runtime_error("The edge margin leaves no usable sheet area.");
             *state->saved=next;EndDialog(h,IDOK);
         }catch(const std::exception& e) {MessageBoxA(h,e.what(),"Nesting settings",MB_OK|MB_ICONEXCLAMATION);}
@@ -357,6 +361,102 @@ std::vector<AIArtHandle> PathContours(AIArtHandle art) {
     if(paths.empty()) throw std::runtime_error("The compound path has no contours.");
     return paths;
 }
+AIRealMatrix RigidTransform(nestai::Point origin,nestai::Point destination,double angle) {
+    auto translation=nestai::Place({0,0},origin,destination,angle);
+    auto xAxis=nestai::Place({1,0},{0,0},{0,0},angle);
+    auto yAxis=nestai::Place({0,1},{0,0},{0,0},angle);
+    return {AIReal(xAxis.x),AIReal(xAxis.y),AIReal(yAxis.x),AIReal(yAxis.y),
+            AIReal(translation.x),AIReal(translation.y)};
+}
+// Read the actual instance contour without inserting temporary artwork or editing the definition.
+bool ReadSymbolContour(AIArtHandle instance,AIPatternHandle pattern,std::vector<nestai::Segment>& contour) {
+    AIArtHandle art=nullptr;
+    if(sAISymbol->GetSymbolPatternArt(pattern,&art)||!art) return false;
+    auto hasExtendedAppearance=[](AIArtHandle object) {
+        AIArtStyleHandle style=nullptr;
+        if(sAIArtStyle->GetArtStyle(object,&style)) return true;
+        if(!style) return false;
+        return bool(sAIArtStyle->ExamineStyle(style,kStyleHasEffects|kStyleHasBrushes)&
+                    (kStyleHasEffects|kStyleHasBrushes));
+    };
+    if(hasExtendedAppearance(instance)) return false;
+    for(int depth=0;depth<32;++depth) {
+        short type=0;ai::int32 attributes=0;
+        if(sAIArt->GetArtType(art,&type)||sAIArt->GetArtUserAttr(art,kArtHidden|kArtIsClipMask,&attributes)||
+           attributes||hasExtendedAppearance(art)) return false;
+        if(type==kGroupArt) {
+            AIArtHandle child=nullptr,sibling=nullptr;
+            if(sAIArt->GetArtFirstChild(art,&child)||!child||
+               sAIArt->GetArtSibling(child,&sibling)||sibling) return false;
+            art=child;continue;
+        }
+        if(type!=kPathArt) return false;
+        AIBoolean closed=false,guide=false,advanced=false;
+        AIPathStyle style{};ai::int16 count=0;
+        if(sAIPath->GetPathClosed(art,&closed)||!closed||sAIPath->GetPathGuide(art,&guide)||guide||
+           sAIPathStyle->GetPathStyle(art,&style,&advanced)||(!style.fillPaint&&!style.strokePaint)||advanced||style.clip||
+           sAIPath->GetPathSegmentCount(art,&count)||count<2||count>2000) return false;
+        std::vector<AIPathSegment> segments(count);
+        AIRealMatrix transform{};
+        if(sAIPath->GetPathSegments(art,0,count,segments.data())||
+           sAISymbol->GetSoftTransformOfSymbolArt(instance,&transform)) return false;
+        auto point=[&](AIRealPoint p)->nestai::Point {
+            return {double(transform.a)*p.h+double(transform.c)*p.v+transform.tx,
+                    double(transform.b)*p.h+double(transform.d)*p.v+transform.ty};
+        };
+        for(const auto& p:segments) contour.push_back({point(p.p),point(p.in),point(p.out)});
+        return true;
+    }
+    return false;
+}
+nestai::Part PrepareSymbol(AIArtHandle instance,AIPatternHandle pattern,AIRealRect bounds,bool& usesContour) {
+    std::vector<nestai::Segment> contour;
+    if(ReadSymbolContour(instance,pattern,contour)) {
+        try {
+            auto part=nestai::Prepare(contour);
+            // The transformed definition must agree with Illustrator's measurements.
+            auto size=nestai::SheetSize(part);
+            constexpr double tolerance=0.11; // matches the existing curve flattening tolerance
+            AIRealRect geometry{};
+            if(!sAIArt->GetArtTransformBounds(instance,nullptr,kNoStrokeBounds|kExcludeGuideBounds,&geometry)&&
+               std::abs(geometry.left-part.origin.x)<=tolerance&&
+               std::abs(geometry.bottom-part.origin.y)<=tolerance&&
+               std::abs(geometry.right-part.origin.x-size.x)<=tolerance&&
+               std::abs(geometry.top-part.origin.y-size.y)<=tolerance) {
+                usesContour=true;
+                return part;
+            }
+        }catch(const std::runtime_error&) {
+            // An unsupported definition remains packable using its visible rectangle.
+        }
+    }
+    usesContour=false;
+    return nestai::PrepareSymbolBounds(bounds.left,bounds.bottom,bounds.right,bounds.top);
+}
+void PlaceSymbol(AIArtHandle source,AIArtHandle copy,const nestai::Part& part,nestai::Point destination,double angle,bool usesContour) {
+    AIPatternHandle originalPattern=nullptr,copyPattern=nullptr;
+    Check(sAISymbol->GetSymbolPatternOfSymbolArt(source,&originalPattern));
+    auto transform=RigidTransform(part.origin,destination,angle);
+    Check(sAITransformArt->TransformArt(copy,&transform,1,kTransformObjects|kTransformEntireArtStyle));
+    Check(sAISymbol->GetSymbolPatternOfSymbolArt(copy,&copyPattern));
+    if(!originalPattern||copyPattern!=originalPattern)
+        throw std::runtime_error("The nested copy did not retain its symbol definition.");
+    if(usesContour) {
+        std::vector<nestai::Segment> contour;
+        if(!ReadSymbolContour(copy,copyPattern,contour)||
+           !nestai::SymbolContourMatchesPlacement(part,contour,destination,angle))
+            throw std::runtime_error("The nested symbol did not match its planned contour.");
+        return;
+    }
+    // Compare the host's enclosing bounds with the placed footprint in document axes.
+    // Asking the host to inverse-rotate the bounds can re-enclose an already measured
+    // bounding rectangle, overstating the size of a diagonally rotated instance.
+    AIRealRect actual{};
+    Check(sAIArt->GetArtBounds(copy,&actual));
+    if(!nestai::SymbolFitsPlacedBounds(part,destination,angle,
+                                    {actual.left,actual.bottom},{actual.right,actual.top}))
+        throw std::runtime_error("A symbol's appearance extends outside its reserved bounds after placement.");
+}
 void DrawLabel(const nestai::Label& label,const std::string& name,AIArtHandle parent,nestai::Point destination,double angle,const nestai::Settings& settings) {
     if(label.strokes.empty()) return;
     AIArtHandle group=nullptr;Check(sAIArt->NewArt(kGroupArt,kPlaceInsideOnTop,parent,&group));
@@ -464,7 +564,8 @@ public:
                 if(type==kGroupArt) Check(sAIArt->IsArtLayerGroup(source,&layerGroup));
                 sources.push_back(source);
                 selectedKinds.push_back(layerGroup?nestai::SelectedKind::LayerContainer:
-                    type==kPathArt?nestai::SelectedKind::Path:type==kCompoundPathArt?nestai::SelectedKind::CompoundPath:nestai::SelectedKind::Unsupported);
+                    type==kPathArt?nestai::SelectedKind::Path:type==kCompoundPathArt?nestai::SelectedKind::CompoundPath:
+                    type==kSymbolArt?nestai::SelectedKind::Symbol:nestai::SelectedKind::Unsupported);
             }
             auto selectedPaths=nestai::SelectedPathIndices(selectedKinds);count=ai::int32(selectedPaths.size());
             if(command==sheetMenu&&(count!=1||selectedKinds[selectedPaths[0]]!=nestai::SelectedKind::Path))
@@ -472,12 +573,33 @@ public:
             std::vector<AIArtHandle> art;std::vector<nestai::Part> parts;
             std::vector<std::vector<std::vector<AIPathSegment>>> originals;
             std::vector<nestai::OutputRect> sourceBounds;
-            std::vector<std::string> names;double right=-1e100;size_t total=0;
+            std::vector<std::string> names;std::vector<bool> symbols,symbolContours;double right=-1e100;size_t total=0;
             for(int i=0;i<count;++i) {
                 AIArtHandle source=sources[selectedPaths[i]];
-                AIPathStyle style;AIBoolean advanced=false;Check(sAIPathStyle->GetPathStyle(source,&style,&advanced));
+                const bool symbol=selectedKinds[selectedPaths[i]]==nestai::SelectedKind::Symbol;
                 ai::int32 attributes=0;Check(sAIArt->GetArtUserAttr(source,kArtLocked|kArtHidden,&attributes));
-                if(style.clip||attributes) throw std::runtime_error("Clipping paths and locked or hidden objects cannot be processed.");
+                if(attributes) throw std::runtime_error("Locked or hidden objects cannot be processed.");
+                AIRealRect bounds;Check(sAIArt->GetArtBounds(source,&bounds));right=std::max(right,double(bounds.right));
+                sourceBounds.push_back({bounds.left,bounds.bottom,bounds.right,bounds.top});
+                ai::UnicodeString name;ASBoolean defaultName=true;Check(sAIArt->GetArtName(source,name,&defaultName));
+                symbols.push_back(symbol);
+                bool usesContour=false;
+                if(symbol) {
+                    AIPatternHandle pattern=nullptr;
+                    Check(sAISymbol->GetSymbolPatternOfSymbolArt(source,&pattern));
+                    if(!pattern) throw std::runtime_error("A selected symbol instance has no definition.");
+                    auto part=PrepareSymbol(source,pattern,bounds,usesContour);
+                    total+=part.outline.size();
+                    if(total>100000) throw std::runtime_error("Selection exceeds 100,000 flattened vertices.");
+                    if(defaultName||name.empty())
+                        Check(sAISymbol->GetSymbolPatternName(pattern,name));
+                    names.push_back(name.as_UTF8());
+                    parts.push_back(std::move(part));symbolContours.push_back(usesContour);
+                    art.push_back(source);originals.emplace_back();continue;
+                }
+                symbolContours.push_back(false);
+                AIPathStyle style;AIBoolean advanced=false;Check(sAIPathStyle->GetPathStyle(source,&style,&advanced));
+                if(style.clip) throw std::runtime_error("Clipping paths cannot be processed.");
                 std::vector<std::vector<AIPathSegment>> sourceRings;std::vector<std::vector<nestai::Segment>> geometry;
                 for(auto path:PathContours(source)) {
                     AIBoolean closed=false,guide=false;Check(sAIPath->GetPathClosed(path,&closed));Check(sAIPath->GetPathGuide(path,&guide));
@@ -493,9 +615,6 @@ public:
                     geometry.push_back(std::move(ring));sourceRings.push_back(std::move(segments));
                 }
                 auto part=nestai::PrepareCompound(geometry,style.evenodd);
-                AIRealRect bounds;Check(sAIArt->GetArtBounds(source,&bounds));right=std::max(right,double(bounds.right));
-                sourceBounds.push_back({bounds.left,bounds.bottom,bounds.right,bounds.top});
-                ai::UnicodeString name;ASBoolean defaultName=true;Check(sAIArt->GetArtName(source,name,&defaultName));
                 names.push_back(defaultName?std::string{}:name.as_UTF8());
                 parts.push_back(std::move(part));art.push_back(source);originals.push_back(std::move(sourceRings));
             }
@@ -515,7 +634,7 @@ public:
                 dialog=DialogBoxParamW(Module(),MAKEINTRESOURCEW(IDD_PROGRESS),owner,ProgressDialog,reinterpret_cast<LPARAM>(&task));
                 if(dialog==-1) throw std::runtime_error("Cannot open label progress.");if(dialog!=IDOK) return kNoErr;
                 if(!task.error.empty()) throw std::runtime_error(task.error);
-                if(!task.labels.labeled) throw std::runtime_error(task.labels.Summary()+"\nName the paths in Illustrator's Layers panel before labeling.");
+                if(!task.labels.labeled) throw std::runtime_error(task.labels.Summary()+"\nName the artwork in Illustrator's Layers panel before labeling.");
                 Check(sAILayer->GetCurrentLayer(&previous));
                 Check(sAIUndo->SetUndoTextUS(ai::UnicodeString("Undo Label Selected Paths"),ai::UnicodeString("Redo Label Selected Paths")));
                 if(settings.separateLabelLayer) {
@@ -632,26 +751,40 @@ public:
                 Check(sAIArt->DuplicateArt(art[index],kPlaceInsideOnTop,partGroup,&copy));
                 auto sheetOrigin=sheetOrigins.at(placement.sheet);
                 nestai::Point destination{sheetOrigin.x+placement.x,sheetOrigin.y+placement.y};
-                auto contours=PathContours(copy);
-                if(contours.size()!=originals[index].size()) throw std::runtime_error("The compound copy changed its contour structure.");
-                for(size_t ring=0;ring<contours.size();++ring) {
-                    auto segments=originals[index][ring];
-                    for(auto& segment:segments) {
-                        segment.p=Point(nestai::Place(Point(segment.p),parts[index].origin,destination,placement.angle));
-                        segment.in=Point(nestai::Place(Point(segment.in),parts[index].origin,destination,placement.angle));
-                        segment.out=Point(nestai::Place(Point(segment.out),parts[index].origin,destination,placement.angle));
+                if(symbols[index]) PlaceSymbol(art[index],copy,parts[index],destination,placement.angle,symbolContours[index]);
+                else {
+                    auto contours=PathContours(copy);
+                    if(contours.size()!=originals[index].size()) throw std::runtime_error("The compound copy changed its contour structure.");
+                    for(size_t ring=0;ring<contours.size();++ring) {
+                        auto segments=originals[index][ring];
+                        for(auto& segment:segments) {
+                            segment.p=Point(nestai::Place(Point(segment.p),parts[index].origin,destination,placement.angle));
+                            segment.in=Point(nestai::Place(Point(segment.in),parts[index].origin,destination,placement.angle));
+                            segment.out=Point(nestai::Place(Point(segment.out),parts[index].origin,destination,placement.angle));
+                        }
+                        ai::int16 copiedCount=0;Check(sAIPath->GetPathSegmentCount(contours[ring],&copiedCount));
+                        if(copiedCount!=ai::int16(segments.size())) throw std::runtime_error("The copied contour changed its point count.");
+                        Check(sAIPath->SetPathSegments(contours[ring],0,ai::int16(segments.size()),segments.data()));
+                        Check(sAIArt->SetArtUserAttr(contours[ring],kArtSelected,0));
                     }
-                    ai::int16 copiedCount=0;Check(sAIPath->GetPathSegmentCount(contours[ring],&copiedCount));
-                    if(copiedCount!=ai::int16(segments.size())) throw std::runtime_error("The copied contour changed its point count.");
-                    Check(sAIPath->SetPathSegments(contours[ring],0,ai::int16(segments.size()),segments.data()));
-                    Check(sAIArt->SetArtUserAttr(contours[ring],kArtSelected,0));
                 }
                 Check(sAIArt->SetArtUserAttr(copy,kArtSelected,0));
                 if(hasLabel) DrawLabel(task.labels.labels[index],names[index],settings.separateLabelLayer?labelParent:partGroup,destination,placement.angle,settings);
             }
             Check(sAILayer->SetCurrentLayer(previous));Check(artboards->SetActive(addedArtboards.front()));output=nullptr;labelLayer=nullptr;addedArtboards.clear();
-            std::string text="Paths:\n- "+std::to_string(task.result.size())+" of "+std::to_string(count)+" paths placed on a new layer\n- "+
-                std::to_string(count-task.result.size())+" unplaced\n- Created "+std::to_string(sheetOrigins.size())+" new artboard(s)\n- Original paths are preserved";
+            bool includesSymbols=std::find(symbols.begin(),symbols.end(),true)!=symbols.end();
+            std::string text=includesSymbols?"Parts:\n- ":"Paths:\n- ";
+            text+=std::to_string(task.result.size())+" of "+std::to_string(count)+(includesSymbols?" parts":" paths")+" placed on a new layer\n- "+
+                std::to_string(count-task.result.size())+" unplaced\n- Created "+std::to_string(sheetOrigins.size())+" new artboard(s)"+
+                (includesSymbols?"\n- Originals are preserved; symbol copies remain linked":"\n- Original paths are preserved");
+            if(includesSymbols) {
+                size_t contourCount=0,boundsCount=0;
+                for(auto placement:task.result) if(symbols[placement.part]) {
+                    if(symbolContours[placement.part]) ++contourCount; else ++boundsCount;
+                }
+                text+="\n- Symbols packed by contour: "+std::to_string(contourCount)+
+                      "\n- Symbols packed by bounds: "+std::to_string(boundsCount);
+            }
             if(settings.centerLayouts) text+="\n- Centered "+std::to_string(sheetOrigins.size()-task.centeringSkipped)+" finished layout(s)";
             if(task.centeringSkipped) text+="\n- Kept "+std::to_string(task.centeringSkipped)+" irregular-sheet layout(s) in place to preserve boundary clearance";
             text+="\n\n"+(settings.addLabels?task.labels.Summary():"Labels:\n- Part labeling was not enabled");

@@ -54,7 +54,7 @@ python native/tests/test_labels.py
 python tools/check_source_tree.py
 ```
 
-The GitHub Actions workflow performs these checks on a Windows runner without downloading, uploading or compiling against the Adobe SDK. Its remote execution cannot be verified until the repository is hosted; the same commands are checked locally.
+The GitHub Actions workflow performs these checks on a Windows runner without downloading, uploading or compiling against the Adobe SDK. Check the workflow result on the commit you intend to release.
 
 ## Test inside Illustrator
 
@@ -73,6 +73,8 @@ Use Illustrator documents from `examples/illustrator-tests`, or create simple cl
 11. Confirm the units dropdown contains only in, mm, cm, pt, px, m, ft. Enable **Label sheet boundary** and verify one sheet-name label below each sheet, outside its bounds, including custom sheets and separate label layers. Packing space must remain unchanged; disabling boundary artwork must disable sheet labels.
 12. Open Window > FreeNest; check all three buttons against the equivalent Object commands, including cancellation and no-document states. Dock, undock, tab-group, collapse, close and reopen the panel. Check workspace restoration, light/dark themes, display scaling and Illustrator shutdown. A modal command must block duplicate panel commands.
 
+13. Nest symbols alongside paths. Nest several filled and stroke-only single-path hexagon symbols on a tight sheet, and confirm the report counts them under Symbols packed by contour. Verify edges can stagger into the space a bounding box would reserve. Include a symbol containing several pieces of artwork, a scaled or reflected instance, and a dynamic symbol with an appearance override. Check fixed and diagonal rotations, visible clearance, optional labels, linked symbol edits, and Undo. Confirm that sources and definitions stay intact.
+
 Automated geometry checks do not establish Adobe's host behavior. Record live checks explicitly before a release.
 
 Panel icon sources are the two SVG files in `native/Resources`. After editing their polygon artwork, run `python native/generate_panel_icons.py` to regenerate the checked-in PNG byte arrays in `native/Source/NestPanelIcons.h`, then rebuild. No additional image library or runtime asset installation is required.
@@ -87,4 +89,4 @@ Run `./prepare-release.ps1` from the repository root. Optional `-IllustratorSDKR
 
 The download has an explicit file list: FreeNest.aip, nfp_nest.dll, INSTALL.md, RELEASE_NOTES.md, release.json, LICENSE, THIRD_PARTY_NOTICES.md and retained third-party licenses. release.json records the version, target host, source commit (when one exists), and whether the source had uncommitted changes. Local tests, SDK files, private configuration and test artwork are excluded. Each version has a separate output directory. Re-running a version replaces its local candidate; never replace an already-published version with different binaries.
 
-Before publication, finish the live Illustrator checks, finalize `release-notes/<version>.md`, commit the intended source, then rerun preparation on that clean commit. Confirm release.json identifies that commit with sourceDirty=false. Create the matching v<version> tag and GitHub release only when ready, then upload the ZIP, RELEASE_NOTES.md and SHA256SUMS.txt from dist/<version>. No script creates tags or publishes releases.
+Before distributing binaries, finish the live Illustrator checks and review the Adobe SDK terms and font provenance described in [third-party notices](../THIRD_PARTY_NOTICES.md). Update `VERSION` and finalize the matching notes, then run preparation from the clean commit you intend to tag. Confirm `release.json` identifies that commit with `sourceDirty: false`. Preserve the existing `v0.1.0` tag; use a new version for changes since that release. Upload the ZIP and `SHA256SUMS.txt` from `dist/<version>` to the matching GitHub release and paste the release notes into its description. No script creates tags or publishes releases.

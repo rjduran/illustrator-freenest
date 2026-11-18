@@ -17,6 +17,9 @@ AIArtboardSuite* sAIArtboard=nullptr;
 AIDocumentSuite* sAIDocument=nullptr;
 AIPanelSuite* sAIPanel=nullptr;
 AIUIThemeSuite* sAIUITheme=nullptr;
+AISymbolSuite* sAISymbol=nullptr;
+AIArtStyleSuite* sAIArtStyle=nullptr;
+AITransformArtSuite* sAITransformArt=nullptr;
 }
 ImportSuite gImportSuites[]={
  kAIMenuSuite,kAIMenuSuiteVersion,&sAIMenu,
@@ -34,5 +37,8 @@ ImportSuite gImportSuites[]={
  kAIDocumentSuite,kAIDocumentSuiteVersion,&sAIDocument,
  kAIPanelSuite,kAIPanelSuiteVersion,&sAIPanel,
  kAIUIThemeSuite,kAIUIThemeSuiteVersion,&sAIUITheme,
+ kAISymbolSuite,kAISymbolVersion,&sAISymbol,
+ kAIArtStyleSuite,kAIArtStyleVersion,&sAIArtStyle,
+ kAITransformArtSuite,kAITransformArtVersion,&sAITransformArt,
  nullptr,0,nullptr
 };

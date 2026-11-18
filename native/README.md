@@ -25,7 +25,7 @@ The panel uses Illustrator's native panel frame and ships inside `FreeNest.aip`;
 
 ## Nest selected paths
 
-1. Select simple closed paths or compound paths with enclosed holes, ungrouping ordinary groups first. Each compound path counts as one part.
+1. Select simple closed paths or compound paths with enclosed holes, ungrouping ordinary groups first. Each compound path counts as one part. Symbol instances can be selected with paths; each instance counts as a single part.
 2. Choose **Object → FreeNest → Nest Selected Paths**.
 3. Sheet width and height start from the **active artboard** on every invocation. The units dropdown offers **in, mm, cm, pt, px, m, ft** and starts with the current document ruler units when available. Picas use points, Q uses millimeters, feet/inches use inches and yards use feet. Switching units converts displayed lengths without changing their physical sizes.
 4. Set contour spacing, sheet edge margin, permitted orientations and calculation time. Contour spacing and sheet edge margin both default to **0.125 in** (3.175 mm).
@@ -39,6 +39,10 @@ Results are copies on an **FreeNest Results** layer. Output artboards are named 
 The completion message uses separate **Paths** and **Labels** sections, with one list item per count or outcome. Label counts cover placed parts only; disabled labeling is reported explicitly. A narrow packing layout is valid; globally optimal packing is not guaranteed. If canvas space or the host artboard limit prevents creating the requested output, newly created output layers/artboards are rolled back.
 
 The nesting dialog has four visible sections: **Sheet Material**, **Packing**, **Layout**, and **Labels**, with Units at the top and Nest/Cancel at the bottom. Sheet Material includes the captured-boundary option and pairs width/height and spacing/margin side by side. Packing contains style, orientations and calculation limit. Layout contains additional artboards and their maximum count, sheet boundary artwork, and centering. Labels contains object-name and sheet labels, with a **Label Options** button for appearance and placement. All controls remain visible without switching tabs.
+
+## Symbol instances
+
+Select instances on the artboard, then run **Nest Selected Paths**. FreeNest packs symbols made from one closed path by that path's contour, after applying the instance's existing transform. This lets six-sided symbols fit in staggered rows. Like ordinary path nesting, contour spacing measures the cut paths and excludes stroke width. Multi-piece symbols, clipping, effects, and other unsupported definitions fall back to their visible rectangles; the completion report counts both modes. Nested copies remain linked. Labels use the instance name or symbol name and fit within the packing footprint. Captured sheet boundaries still require a simple closed path.
 
 ## Packing style and centering
 
@@ -90,7 +94,7 @@ For a first test, name a rectangle `Panel-01` and a concave part `Bracket-A`, th
 
 - 1–500 individual, simple, closed paths; one copy per selected path; one or multiple identical sheets, rectangular or captured from a simple closed path.
 - Concave paths and cubic Bézier curves are supported. Original anchors, handles and stroke widths are preserved in the copies. Only the solver outlines are flattened.
-- Fixed, half-turn, quarter-turn and 45-degree orientations; no mirroring or scaling.
+- Fixed, half-turn, quarter-turn, 45-degree and 30-degree orientations; no mirroring or scaling.
 - Spacing refers to contours, excluding stroke widths and effects. Curve tolerance is 0.1 pt, allowed for by adding 0.2 pt between parts and 0.1 pt at sheet edges.
 - Ordinary groups, disconnected compound islands, nested islands, touching/overlapping holes, sheet holes, clipping masks, open paths, text and raster artwork are not supported. Gradient/pattern positioning and live effects are unverified.
 - The solver and label generator work on copied geometry. Illustrator API calls stay on the main thread. Cancellation and calculation limits are cooperative; preparation, validation and applying results add time.

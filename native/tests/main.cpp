@@ -158,6 +158,8 @@ int wmain(int argc,wchar_t** argv) {
         std::cout<<"PASS document-unit scales, inherited label height and reversible physical conversions\n";
         auto selected=nestai::SelectedPathIndices({Kind::LayerContainer,Kind::Path,Kind::Path,Kind::Path,Kind::Path,Kind::Path});
         Require(selected.size()==5&&selected.front()==1&&selected.back()==5,"Layer container prevented five-path selection");
+        auto mixed=nestai::SelectedPathIndices({Kind::LayerContainer,Kind::Symbol,Kind::CompoundPath,Kind::Symbol});
+        Require(mixed==std::vector<size_t>{1,2,3},"Mixed artwork selection dropped a symbol or compound path");
         bool rejectedGroup=false;
         try {nestai::SelectedPathIndices({Kind::Unsupported,Kind::Path});}catch(const std::exception&) {rejectedGroup=true;}
         Require(rejectedGroup,"An ordinary group was silently split into parts");
@@ -222,6 +224,59 @@ int wmain(int argc,wchar_t** argv) {
         auto rect=nestai::Prepare(rectangle);nestai::Settings s;s.width=40;s.height=80;s.margin=5;s.gap=3;s.rotations=2;s.seconds=1;
         Require(engine.Solve({rect},s).empty(),"Half-turn-only rectangle was rotated by 90 degrees");
         s.rotations=4;Require(engine.Solve({rect},s).size()==1,"Quarter-turn rectangle did not fit");
+        nestai::Settings thirty;
+        thirty.width=58;thirty.height=39;thirty.margin=0.5;thirty.gap=0.5;thirty.seconds=1;
+        auto narrow=nestai::PrepareSymbolBounds(-17,34,43,42);
+        thirty.rotations=8;
+        Require(engine.Solve({narrow},thirty).empty(),"45-degree steps unexpectedly fit the 30-degree fixture");
+        thirty.rotations=12;
+        auto thirtyResult=engine.Solve({narrow},thirty);
+        Require(thirtyResult.size()==1&&std::abs(std::abs(std::remainder(thirtyResult[0].angle,180.0))-30.0)<1e-4,
+                "30-degree rotation did not fit a part requiring a diagonal turn");
+        auto symbol=nestai::PrepareSymbolBounds(-120,250,-60,270);
+        auto symbolResult=engine.Solve({symbol},s);
+        Require(symbolResult.size()==1,"Offset symbol footprint did not fit a quarter-turn layout");
+        auto originalCorner=nestai::Place({-120,250},symbol.origin,
+            {symbolResult.front().x,symbolResult.front().y},symbolResult.front().angle);
+        Require(std::abs(originalCorner.x-symbolResult.front().x)<1e-8&&
+                std::abs(originalCorner.y-symbolResult.front().y)<1e-8,"Symbol footprint lost its document origin");
+        // Fixture: Illustrator reports an axis-aligned box for a rotated 60 x 20 symbol.
+        double diagonal=std::sqrt(0.5);
+        Require(nestai::SymbolFitsPlacedBounds(symbol,{100,200},45,
+                    {100-20*diagonal,200},{100+60*diagonal,200+80*diagonal}),
+                "A valid diagonal symbol was rejected");
+        Require(nestai::SymbolFitsPlacedBounds(symbol,{100,200},90,{80,200},{100,260}),
+                "A valid quarter-turn symbol was rejected");
+        Require(!nestai::SymbolFitsPlacedBounds(symbol,{100,200},90,{79,200},{100,260}),
+                "Symbol bounds extending past the reserved placement were accepted");
+        // Two fixed hexagons can stagger on this sheet; their bounding boxes cannot.
+        const double h=5*std::sqrt(3.0);
+        std::vector<nestai::Segment> hex;
+        for(auto local:std::vector<nestai::Point>{{0,h},{5,0},{15,0},{20,h},{15,2*h},{5,2*h}}) {
+            nestai::Point p{local.x-120,local.y+250};
+            hex.push_back({p,p,p});
+        }
+        auto hexSymbol=nestai::Prepare(hex);
+        auto hexBox=nestai::PrepareSymbolBounds(-120,250,-100,250+2*h);
+        nestai::Settings hexJob;
+        hexJob.width=37;hexJob.height=28;hexJob.margin=0.5;hexJob.gap=0.5;
+        hexJob.rotations=1;hexJob.seconds=1;hexJob.packingStyle=nestai::PackingStyle::TightFit;
+        Require(engine.Solve({hexBox,hexBox},hexJob).size()==1,"Hexagon bounds fixture did not constrain the layout");
+        Require(engine.Solve({hexSymbol,hexSymbol},hexJob).size()==2,"Actual hexagon contours did not stagger");
+        std::vector<nestai::Segment> rotated;
+        // Independent exact quarter turn around the footprint origin, with a new destination.
+        for(auto segment:hex) {
+            auto p=segment.anchor;
+            nestai::Point q{100-(p.y-250),200+(p.x+120)};
+            rotated.push_back({q,q,q});
+        }
+        Require(nestai::SymbolContourMatchesPlacement(hexSymbol,rotated,{100,200},90),
+                "Rotating a linked hexagon's contour did not match its planned placement");
+        rotated[0].anchor.x+=0.25;
+        Require(!nestai::SymbolContourMatchesPlacement(hexSymbol,rotated,{100,200},90),
+                "A distorted symbol contour was accepted");
+        std::cout<<"PASS two staggered hexagon contours fit where only one bounding box fits\n";
+        std::cout<<"PASS mixed symbol/path selection and offset symbol footprint placement\n";
         s.width=80;s.height=40;s.rotations=1;s.multipleSheets=false;
         Require(engine.Solve({rect,rect,rect},s).size()==1,"Single-sheet option used extra sheets");
         s.multipleSheets=true;s.maxSheets=3;

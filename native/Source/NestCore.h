@@ -11,6 +11,10 @@ struct Point { double x=0,y=0; };
 struct Segment { Point anchor,left,right; };
 struct Part { std::vector<Segment> segments; std::vector<Point> outline; Point origin; std::vector<std::vector<Point>> holes; };
 enum class PackingStyle { CompactArea=0, NarrowStrip=1, TightFit=2 };
+struct OrientationChoice { const char* label; int count; };
+inline constexpr OrientationChoice OrientationChoices[]={
+    {"Fixed",1},{"0 / 180 degrees",2},{"Quarter turns",4},{"45-degree steps",8},{"30-degree steps",12}
+};
 struct Settings { double width=300*72/25.4,height=200*72/25.4,gap=0.125*72,margin=0.125*72,seconds=5; int rotations=4; PackingStyle packingStyle=PackingStyle::NarrowStrip; bool centerLayouts=false; Units units=Units::Inches; bool multipleSheets=false; int maxSheets=10; bool includeSheetBoundary=true; bool labelSheetBoundary=false; std::vector<Point> sheetLabelRegion; bool useCustomSheet=false; Part customSheet; bool addLabels=false; double labelHeight=0.125*72; int labelFont=0; LabelColor labelColor=LabelColor::Blue; double labelStrokeWidth=0.1; bool separateLabelLayer=false; };
 using Strokes=std::vector<std::vector<Point>>;
 struct Label {Strokes strokes;double height=0;};
@@ -19,6 +23,9 @@ struct Placement { int part=-1,sheet=-1; double x=0,y=0,angle=0; };
 int CenterLayouts(std::vector<Placement>& placements,const std::vector<Part>& parts,const Settings& settings);
 Part Prepare(const std::vector<Segment>& segments);
 Part PrepareCompound(const std::vector<std::vector<Segment>>& rings,bool evenOdd);
+Part PrepareSymbolBounds(double left,double bottom,double right,double top);
+bool SymbolFitsPlacedBounds(const Part& footprint,Point destination,double angle,Point lower,Point upper);
+bool SymbolContourMatchesPlacement(const Part& footprint,const std::vector<Segment>& actual,Point destination,double angle);
 Point Place(Point p,Point origin,Point destination,double angle);
 Point SheetSize(const Part& sheet);
 bool FitsSheet(const std::vector<Point>& part,const std::vector<Point>& sheet,double margin);
