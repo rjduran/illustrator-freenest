@@ -25,6 +25,7 @@ patterns=[
 for name in paths:
     path=pathlib.PurePosixPath(name)
     illustrator_fixture=(path.suffix.lower()=='.ai' and path.parent==pathlib.PurePosixPath('examples/illustrator-tests'))
+    docs_image=(path.suffix.lower()=='.png' and path.parent==pathlib.PurePosixPath('docs/images'))
     if (path.suffix.lower() in binary_suffixes and not illustrator_fixture) or any(part in {'vendor','build','package','dist','legacy','.vs','__pycache__','illustratorapi','legalnotices'} for part in path.parts):
         issues.append(f'{name}: generated, vendor or SDK content is tracked')
     if name.endswith('build.local.psd1'):
@@ -32,8 +33,10 @@ for name in paths:
     data=(root/name).read_bytes()
     if len(data)>2_000_000 and not illustrator_fixture:
         issues.append(f'{name}: unexpectedly large source file')
-    # Illustrator fixtures can be binary/PDF; inspect readable content without treating them as source.
-    try: text=data.decode('utf-8-sig',errors='replace' if illustrator_fixture else 'strict')
+    if docs_image and not data.startswith(b'\x89PNG\r\n\x1a\n'):
+        issues.append(f'{name}: documentation image is not a PNG')
+    # Inspect readable content in approved binary assets without requiring UTF-8.
+    try: text=data.decode('utf-8-sig',errors='replace' if illustrator_fixture or docs_image else 'strict')
     except UnicodeDecodeError:
         issues.append(f'{name}: source is not UTF-8');continue
     for label,pattern in patterns:

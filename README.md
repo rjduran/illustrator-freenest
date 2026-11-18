@@ -8,6 +8,10 @@ Arrange vector parts for cutting and add single-stroke labels from Illustrator o
 
 The features below describe the current source. The [0.1.0 release notes](release-notes/0.1.0.md) describe the original pre-release; symbol nesting and 30-degree turns are newer work.
 
+![FreeNest before and after: scattered polygons on the left, tightly nested and labeled on the right](docs/images/freenest.png)
+
+*The same parts before nesting (left) and after packing and labeling (right), leaving a large unused area on the output sheet.*
+
 ## Use cases
 
 FreeNest is built primarily for **laser cutting** and **vinyl cutting**. Arrange parts on a sheet of plywood or acrylic, or fit more decal shapes into a defined section of vinyl. Set the spacing between parts and the margin from the material edge to suit your process.
